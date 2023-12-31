@@ -1,7 +1,8 @@
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.functions._
 
 import java.net.URL
 
@@ -43,7 +44,9 @@ object ProcessingObj {
     println(df.count())
 
     // payment methods used different rides
-    df.groupBy(col("Payment_type")).count().show(10,false)
+    val ridePaymentMethodCountsDf = df.groupBy(col("Payment_type")).count()
+
+    ridePaymentMethodCountsDf.show(10,false)
 
     val paymentTypeLookupsString =
       """
@@ -97,9 +100,34 @@ object ProcessingObj {
 
     val lkpPaymentCols = Seq("paymentTypeId","paymentTypeName")
 
-    val paymentLookupDf = paymentTypeLookupTplArr2.toSeq.toDF(lkpPaymentCols:_*)
+    val allPaymentTypesDf = paymentTypeLookupTplArr2.toSeq.toDF(lkpPaymentCols:_*)
 
-    paymentLookupDf.show(10,false)
+    allPaymentTypesDf.show(10,false)
+
+    // Print the name of payment method used and the payment method count.
+    // Want to know which payment mode is more frequent choice of riders
+
+    val paymentMethodsAndCounts = allPaymentTypesDf.join(ridePaymentMethodCountsDf,
+      allPaymentTypesDf("paymentTypeId")===ridePaymentMethodCountsDf("Payment_type"),
+      "left")
+
+    paymentMethodsAndCounts.show(10,false)
+
+    val paymentMethodsAndCountsFinal = paymentMethodsAndCounts
+      .drop(col("Payment_type"))
+      .withColumnRenamed("count","numberOfTimesPaymentMethodUsed")
+
+    paymentMethodsAndCountsFinal.show(10,false)
+
+    val mostNumOfTimesUsedPMC = paymentMethodsAndCountsFinal.
+      select(max("numberOfTimesPaymentMethodUsed").as("maxCntPM"))
+      .first().getAs[Long]("maxCntPM")
+
+
+    val detailsOfMostNumOfTimesPMUsed = paymentMethodsAndCountsFinal.
+      filter(col("numberOfTimesPaymentMethodUsed")===mostNumOfTimesUsedPMC)
+
+    detailsOfMostNumOfTimesPMUsed.show(5,false)
 
   }
 
