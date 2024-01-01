@@ -1,7 +1,6 @@
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
 
 import java.net.URL
@@ -128,6 +127,38 @@ object ProcessingObj {
       filter(col("numberOfTimesPaymentMethodUsed")===mostNumOfTimesUsedPMC)
 
     detailsOfMostNumOfTimesPMUsed.show(5,false)
+
+    //Q2. calculate total Revenue, record count, Avg trip distance, Avg Fare amount, Avg Trip Amount
+
+    val generalStatsDf = df.agg(sum(col("total_amount")).as("revenue"),
+      count(col("*")).as("recordCount"),
+      avg(col("Trip_distance")).as("AvgTripDistance"),
+      avg(col("Fare_amount")).as("AvgFareAmount"),
+      avg(col("Tip_amount")).as("AvgTipAmount")
+    )
+
+    generalStatsDf.show(10,false)
+
+    //Q2. Sub Tasks
+    // 1. Round all decimal places to 3 digits.
+    // 2. Amount Cols should be appended with USD and Distance cols should be appended with Miles
+
+    val generalStatsFormattedDf = generalStatsDf
+      .withColumn("revenue", concat_ws(" ",round(col("revenue"),3),lit("USD")))
+      .withColumn("AvgTripDistance", concat_ws(" ",round(col("AvgTripDistance"),3), lit("Miles")))
+      .withColumn("AvgFareAmount", concat_ws(" ",round(col("AvgFareAmount"),3), lit("USD")))
+      .withColumn("AvgTipAmount", concat_ws(" ",round(col("AvgTipAmount"),3), lit("USD")))
+
+    generalStatsFormattedDf.show(10,false)
+
+    // relationship between total_amount and fare_amount
+
+    df.select(count("*").as("total_rows"),
+      sum( when(col("Total_amount")>=col("Fare_amount"),lit(1))
+        .otherwise(lit(0))).as("cnt_total_amt"),
+      sum(when(col("Total_amount") < col("Fare_amount"), lit(1))
+        .otherwise(lit(0))).as("cnt_fare_amt")
+    ).show(100,false)
 
   }
 
