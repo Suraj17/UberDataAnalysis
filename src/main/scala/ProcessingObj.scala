@@ -10,7 +10,7 @@ object ProcessingObj {
   def main(args:Array[String]):Unit = {
 
     val conf = new SparkConf().
-      setAppName("first").
+      setAppName("UberDataAnalysis").
       setMaster("local[*]").
       set("spark.driver.host", "localhost").
       set("spark.driver.allowMultipleContexts", "true")
@@ -42,7 +42,17 @@ object ProcessingObj {
 
     println(df.count())
 
-    // payment methods used different rides
+    // relationship between total_amount and fare_amount
+    // this is just some general data wrangling to understand the raw data better
+
+    df.select(count("*").as("total_rows"),
+      sum(when(col("Total_amount") >= col("Fare_amount"), lit(1))
+        .otherwise(lit(0))).as("cnt_total_amt"),
+      sum(when(col("Total_amount") < col("Fare_amount"), lit(1))
+        .otherwise(lit(0))).as("cnt_fare_amt")
+    ).show(100, false)
+
+    // payment methods used for different rides
     val ridePaymentMethodCountsDf = df.groupBy(col("Payment_type")).count()
 
     ridePaymentMethodCountsDf.show(10,false)
@@ -103,8 +113,7 @@ object ProcessingObj {
 
     allPaymentTypesDf.show(10,false)
 
-    // Print the name of payment method used and the payment method count.
-    // Want to know which payment mode is more frequent choice of riders
+    // Q1. Print the name of payment method used and the payment method count.
 
     val paymentMethodsAndCounts = allPaymentTypesDf.join(ridePaymentMethodCountsDf,
       allPaymentTypesDf("paymentTypeId")===ridePaymentMethodCountsDf("Payment_type"),
@@ -118,17 +127,19 @@ object ProcessingObj {
 
     paymentMethodsAndCountsFinal.show(10,false)
 
+    // Q2. Want to know which payment mode is more frequent choice of riders
+
     val mostNumOfTimesUsedPMC = paymentMethodsAndCountsFinal.
       select(max("numberOfTimesPaymentMethodUsed").as("maxCntPM"))
       .first().getAs[Long]("maxCntPM")
 
 
-    val detailsOfMostNumOfTimesPMUsed = paymentMethodsAndCountsFinal.
+    val detailsOfPMUsedMostNumOfTimes = paymentMethodsAndCountsFinal.
       filter(col("numberOfTimesPaymentMethodUsed")===mostNumOfTimesUsedPMC)
 
-    detailsOfMostNumOfTimesPMUsed.show(5,false)
+    detailsOfPMUsedMostNumOfTimes.show(5,false)
 
-    //Q2. calculate total Revenue, record count, Avg trip distance, Avg Fare amount, Avg Trip Amount
+    //Q3. calculate total Revenue, record count, Avg trip distance, Avg Fare amount, Avg Trip Amount
 
     val generalStatsDf = df.agg(sum(col("total_amount")).as("revenue"),
       count(col("*")).as("recordCount"),
@@ -139,7 +150,7 @@ object ProcessingObj {
 
     generalStatsDf.show(10,false)
 
-    //Q2. Sub Tasks
+    //Q3. Sub Tasks
     // 1. Round all decimal places to 3 digits.
     // 2. Amount Cols should be appended with USD and Distance cols should be appended with Miles
 
@@ -150,15 +161,6 @@ object ProcessingObj {
       .withColumn("AvgTipAmount", concat_ws(" ",round(col("AvgTipAmount"),3), lit("USD")))
 
     generalStatsFormattedDf.show(10,false)
-
-    // relationship between total_amount and fare_amount
-
-    df.select(count("*").as("total_rows"),
-      sum( when(col("Total_amount")>=col("Fare_amount"),lit(1))
-        .otherwise(lit(0))).as("cnt_total_amt"),
-      sum(when(col("Total_amount") < col("Fare_amount"), lit(1))
-        .otherwise(lit(0))).as("cnt_fare_amt")
-    ).show(100,false)
 
   }
 
